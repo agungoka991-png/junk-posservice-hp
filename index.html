@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JUNK MOBILE POS PRO + SECURITY</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --dark: #1d3557; --accent: #e63946; }
+        body { background: #f4f7f9; font-family: 'Segoe UI', sans-serif; }
+        #loginPage { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--dark); z-index: 9999; display: flex; align-items: center; justify-content: center; color: white; }
+        .header-pro { background: var(--dark); color: white; padding: 30px 0; border-radius: 0 0 30px 30px; margin-bottom: 25px; }
+        #mainLogo { width: 90px; height: 90px; border-radius: 50%; border: 3px solid #fff; background: #fff; object-fit: cover; }
+        .card-servis { border: none; border-radius: 18px; border-left: 6px solid #ffc107; margin-bottom: 15px; }
+        .card-servis.selesai { border-left-color: #28a745; }
+        .imei-badge { background: #e9ecef; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+<div id="loginPage">
+    <div class="text-center p-4 shadow-lg rounded-4" style="background: rgba(255,255,255,0.1); width: 300px;">
+        <h4 class="fw-bold mb-3">Admin Login</h4>
+        <input type="text" id="user" class="form-control mb-2" placeholder="Username">
+        <input type="password" id="pass" class="form-control mb-3" placeholder="Password">
+        <button onclick="cekLogin()" class="btn btn-danger w-100 fw-bold">MASUK</button>
+    </div>
+</div>
+
+<div id="mainApp" style="display: none;">
+    <div class="header-pro shadow text-center">
+        <img id="mainLogo" src="https://cdn-icons-png.flaticon.com/512/4233/4233830.png">
+        <h4 class="fw-bold mt-2">JUNK MOBILE SOLUTION</h4>
+        <div class="container">
+            <div class="row g-2 mt-3 px-3">
+                <div class="col-4"><div class="p-2 border rounded"><small>Antrean</small><h4 id="antri" class="mb-0">0</h4></div></div>
+                <div class="col-8"><div class="p-2 border rounded text-start"><small>Keuntungan 7 Hari</small><h4 id="omzet7" class="mb-0 text-warning">Rp 0</h4></div></div>
+            </div>
+            <div class="mt-3 d-flex justify-content-center gap-2">
+                <button class="btn btn-sm btn-outline-light rounded-pill" onclick="document.getElementById('inLogo').click()">Ganti Logo</button>
+                <button class="btn btn-sm btn-success rounded-pill" onclick="eksporExcel()">Download Excel</button>
+                <button onclick="logout()" class="btn btn-sm btn-danger rounded-pill">Keluar</button>
+                <input type="file" id="inLogo" accept="image/*" style="display:none" onchange="upLogo(this)">
+            </div>
+        </div>
+    </div>
+
+    <div class="container" style="max-width: 550px;">
+        <div class="d-grid mb-4">
+            <button class="btn btn-danger btn-lg shadow fw-bold" data-bs-toggle="collapse" data-bs-target="#formBox">+ INPUT SERVIS BARU</button>
+        </div>
+        <div class="collapse mb-4" id="formBox">
+            <div class="card card-body shadow-sm border-0 rounded-4">
+                <input type="text" id="cust" class="form-control mb-2" placeholder="Nama Pelanggan">
+                <input type="number" id="wa" class="form-control mb-2" placeholder="WA (628...)">
+                <input type="text" id="dev" class="form-control mb-2" placeholder="Tipe HP & Kendala">
+                <input type="text" id="imei" class="form-control mb-2" placeholder="Nomor IMEI">
+                <input type="text" id="ps_layar" class="form-control mb-3" placeholder="Password/Pola Layar">
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><label class="small text-muted">Total Biaya</label><input type="number" id="by" class="form-control"></div>
+                    <div class="col-6"><label class="small text-muted">DP</label><input type="number" id="dp" class="form-control" value="0"></div>
+                </div>
+                <button onclick="simpan()" class="btn btn-dark w-100 py-2 fw-bold">SIMPAN DATA</button>
+            </div>
+        </div>
+        <div id="listData"></div>
+    </div>
+</div>
+
+<script>
+    // Konfigurasi Keamanan (Ganti ini!)
+    const USER_ADMIN = "admin"; 
+    const PASS_ADMIN = "admin0987654321";
+
+    function cekLogin() {
+        const u = document.getElementById('user').value;
+        const p = document.getElementById('pass').value;
+        if(u === USER_ADMIN && p === PASS_ADMIN) {
+            sessionStorage.setItem('isLogin', 'true');
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            render();
+        } else { alert("Login Gagal!"); }
+    }
+
+    if(sessionStorage.getItem('isLogin') === 'true') {
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+    }
+
+    function logout() { sessionStorage.removeItem('isLogin'); location.reload(); }
+
+    // Firebase Config (Tetap Gunakan Milik Anda)
+    const firebaseConfig = {
+        apiKey: "AIzaSyDwedd2GtYGlJrmO9JdEpqR82iQtobA6ng",
+        authDomain: "pos-service-hp.firebaseapp.com",
+        projectId: "pos-service-hp",
+        storageBucket: "pos-service-hp.firebasestorage.app",
+        messagingSenderId: "745481142401",
+        appId: "1:745481142401:web:755c1f11b2f3632c920d80"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Fungsi Logo
+    function upLogo(i) {
+        if (i.files && i.files[0]) {
+            const r = new FileReader();
+            r.onload = (e) => { localStorage.setItem('junk_logo', e.target.result); document.getElementById('mainLogo').src = e.target.result; };
+            r.readAsDataURL(i.files[0]);
+        }
+    }
+
+    window.onload = () => {
+        const l = localStorage.getItem('junk_logo');
+        if(l) document.getElementById('mainLogo').src = l;
+        if(sessionStorage.getItem('isLogin') === 'true') render();
+    };
+
+    function simpan() {
+        const name = document.getElementById('cust').value;
+        if(!name) return alert("Isi nama!");
+        db.collection("servis").add({
+            pelanggan: name, wa: document.getElementById('wa').value,
+            hp: document.getElementById('dev').value, imei: document.getElementById('imei').value,
+            pass: document.getElementById('ps_layar').value, 
+            biaya: parseInt(document.getElementById('by').value || 0),
+            dp: parseInt(document.getElementById('dp').value || 0),
+            status: "Proses", 
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            tgl: new Date().toLocaleString('id-ID')
+        }).then(() => location.reload());
+    }
+
+    function render() {
+        db.collection("servis").orderBy("tgl", "desc").onSnapshot((snap) => {
+            let htm = ""; let count = 0; let o7 = 0;
+            const weekAgo = new Date(new Date().getTime() - (7 * 24 * 60 * 60 * 1000));
+            snap.forEach((doc) => {
+                const d = doc.data(); const sisa = d.biaya - d.dp;
+                const isSelesai = d.status === "Selesai";
+                if(isSelesai) {
+                    const tglS = d.timestamp ? d.timestamp.toDate() : new Date();
+                    if(tglS >= weekAgo) o7 += d.biaya;
+                }
+                count++;
+                const msg = encodeURIComponent(`Halo ${d.pelanggan},\n*JUNK MOBILE SOLUTION*\nStatus: ${d.status}\nSisa: Rp ${sisa.toLocaleString()}`);
+                htm += `
+                <div class="card card-servis shadow-sm p-3 bg-white ${isSelesai ? 'selesai' : ''}">
+                    <div class="d-flex justify-content-between mb-2">
+                        <div><h6 class="fw-bold mb-0">${d.pelanggan}</h6><small class="text-muted" style="font-size:0.7rem">${d.tgl}</small></div>
+                        <span class="badge ${isSelesai ? 'bg-success' : 'bg-warning text-dark'} rounded-pill">${d.status}</span>
+                    </div>
+                    <div class="small mb-2">📱 <b>${d.hp}</b><br>🆔 <span class="imei-badge">${d.imei || '-'}</span> | 🔑 <b>${d.pass || '-'}</b></div>
+                    <div class="d-flex justify-content-between align-items-center border-top pt-2">
+                        <div><span class="text-danger fw-bold">Rp ${sisa.toLocaleString()}</span></div>
+                        <div class="btn-group">
+                            <a href="https://api.whatsapp.com/send?phone=${d.wa}&text=${msg}" target="_blank" class="btn btn-sm btn-success">WA</a>
+                            <button onclick="cetak('${doc.id}')" class="btn btn-sm btn-outline-dark">🖨️</button>
+                            <button onclick="upd('${doc.id}', '${d.status}')" class="btn btn-sm ${isSelesai ? 'btn-secondary' : 'btn-primary'}">${isSelesai ? '↩️' : '✔'}</button>
+                            <button onclick="del('${doc.id}')" class="btn btn-sm btn-light border">✕</button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('listData').innerHTML = htm;
+            document.getElementById('antri').innerText = count;
+            document.getElementById('omzet7').innerText = "Rp " + o7.toLocaleString();
+        });
+    }
+
+    function eksporExcel() {
+        db.collection("servis").get().then((snap) => {
+            let data = []; snap.forEach(doc => data.push(doc.data()));
+            const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan"); XLSX.writeFile(wb, "Laporan_JunkMobile.xlsx");
+        });
+    }
+
+    function upd(id, s) { db.collection("servis").doc(id).update({ status: s === "Proses" ? "Selesai" : "Proses" }); }
+    function del(id) { if(confirm("Hapus?")) db.collection("servis").doc(id).delete(); }
+    
+    function cetak(id) {
+        db.collection("servis").doc(id).get().then((doc) => {
+            const d = doc.data(); const l = localStorage.getItem('junk_logo') || '';
+            const n = `<div style="width:250px; font-family:monospace; font-size:12px; padding:10px;"><center>${l ? `<img src="${l}" style="width:50px; border-radius:50%;"><br>` : ''}<strong>JUNK MOBILE SOLUTION</strong><br>-------------------------</center>Nama: ${d.pelanggan}<br>Tgl : ${d.tgl}<br>Unit: ${d.hp}<br>IMEI: ${d.imei || '-'}<br>Pass: ${d.pass || '-'}<br>-------------------------<br>Total: Rp ${d.biaya.toLocaleString()}<br>DP   : Rp ${d.dp.toLocaleString()}<br><strong>SISA : Rp ${(d.biaya - d.dp).toLocaleString()}</strong><br>-------------------------<br><center>Terima Kasih</center></div>`;
+            const w = window.open(); w.document.write(n); w.print(); w.close();
+        });
+    }
+</script>
+</body>
+</html>
